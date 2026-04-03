@@ -1,0 +1,149 @@
+
+
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	
+	<meta name="viewport" content="width=375,user-scalable=no">
+	
+	
+	
+	
+	
+	<meta name="format-detection" content="telephone=no"/>
+	<title>取派作业</title>
+	
+	
+	
+	<style>
+		#loading-bottom{width:204px;height:34px;position:absolute;bottom:60px;left:0;right:0;margin:auto;text-align: center;text-decoration:none;color:#787878;}
+		#loadingPage{
+			width:100%;
+			height:100%;
+			display:none;
+			
+			background-color:#E9FAFA;
+			
+			
+			z-index: 9999;
+			position: absolute;
+			top:0;
+			left:0;
+		}
+		
+		#loadingGif{
+			position:absolute;
+			max-width: 100%;
+			top:40%;
+			left:50%;
+			transform:translate(-50%,-50%);
+			-webkit-transform:translate(-50%,-50%);
+		}
+		
+		
+		
+		
+		#loadingBar{
+			position:absolute;
+			top:55%;
+			left:50%;
+			height:1px;
+			width:70%;
+			transform:translate(-50%,-50%);
+		}
+		#loadingBarInner{
+			position:relative;
+			height:1px;
+			width:70%;
+			background:#909090;
+			border-radius:1px;
+			-webkit-border-radius:1px;
+			-moz-border-radius:1px;
+			background-color:#909090;
+		}
+		
+	</style>
+	
+	
+
+</head>
+<body>
+	<div id="app"></div>
+	
+	
+	
+	
+	
+	<div id="loadingPage">
+		
+		<img id="loadingGif" src="sta/e10184252/b3221b81661167bc429aea99e2586aee_28221_1024_1024.gif"/>
+		
+		
+		
+		
+		<div id="loadingBar"><div id="loadingBarInner"></div></div>
+		
+	</div>
+	
+	
+
+	<script>
+	
+	
+	
+	
+	var loadingDone = false;
+	
+	var loadingTime = 0 * 1000;
+	if(loadingTime > 0) {
+		setTimeout(function() {
+			loadingDone = true;
+			var e = document.getElementById("loadingPage");
+			e && e.parentNode.removeChild(e);
+			setTimeout(function(){window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({'type':'hideSplash'}))},200);
+		},loadingTime)
+	}
+	function onprogress(p) {
+		//console.log(p);
+		if (loadingDone) return;
+		if (p <= 1) {
+			p = Math.round(p * 100)
+		}
+		var loadingPage = document.getElementById("loadingPage");
+		if (loadingPage) {
+			loadingPage.style.display = 'block';
+		}
+		
+		
+		
+		var bar = document.getElementById("loadingBarInner");
+		if (bar) {
+			bar.style.width = p + '%';
+		}
+		
+		if(p >= 100 && loadingTime <= 0) {
+			loadingDone = true;
+			var e = document.getElementById("loadingPage");
+			e && e.parentNode.removeChild(e);
+			setTimeout(function(){window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({'type':'hideSplash'}))},200);
+		}
+	}
+	
+	
+	onprogress(0);
+
+	var vxConfig = {
+		onprogress,
+		hy: {},
+		
+		
+	}
+	</script>
+	
+	<script src="assets/player.js?1448478525"></script>
+</body>
+</html>
