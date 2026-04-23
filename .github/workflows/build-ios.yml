@@ -20,7 +20,9 @@ jobs:
         run: npm install
 
       - name: Sync iOS project
-        run: npx cap sync ios
+        run: |
+          chmod +x ./node_modules/.bin/cap
+          npx cap sync ios
 
       - name: Install p12 & mobileprovision
         run: |
