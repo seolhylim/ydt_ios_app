@@ -21,32 +21,27 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 安装证书和描述文件
+      # 修复后的证书导入步骤
       - name: Install Cert & Profile
         run: |
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev.p12
           echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > dev.mobileprovision
 
-          # 创建并配置钥匙串
           security create-keychain -p temp123 build.keychain
           security unlock-keychain -p temp123 build.keychain
-          security default-keychain -s build.keychain
-          security list-keychains -d user -s build.keychain
-          security set-key-partition-list -S apple:,apple-tool:,codesign: -s -k temp123 build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-key-partition-list -S apple:,apple-tool:,codesign: -k temp123 build.keychain
 
-          # 导入证书
           security import dev.p12 \
             -k build.keychain \
             -P "${{ secrets.IOS_P12_PASSWORD }}" \
             -f pkcs12
 
-          # 安装描述文件
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision)
           cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      # 编译并签名
-      - name: Xcode Archive & Export
+      - name: Xcode Archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -57,6 +52,9 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
 
+      - name: Export IPA
+        run: |
+          cd ios/App
           /usr/libexec/PlistBuddy -c "Add :method string development" \
             -c "Add :signingStyle string manual" \
             -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
@@ -67,7 +65,6 @@ jobs:
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
-      # 上传最终IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
