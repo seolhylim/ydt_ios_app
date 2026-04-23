@@ -1,4 +1,4 @@
-name: Build iOS (FINAL - Direct .app to IPA)
+name: Build iOS + Upload to Release
 on:
   push:
     branches: [ main ]
@@ -24,7 +24,6 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # 🔥 编译（无签名，已成功）
       - name: Build archive NO SIGNING
         run: |
           cd ios/App
@@ -38,7 +37,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      # 🔥 直接把 .app 打包成 IPA（跳过 xcodebuild export）
       - name: Build IPA manually
         run: |
           cd ios/App
@@ -46,8 +44,13 @@ jobs:
           cp -R build/App.xcarchive/Products/Applications/App.app Payload/
           zip -r My-IPA.ipa Payload/
 
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+      # 🔥 自动发布到 GitHub Releases（下载超级快）
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: My-IPA
-          path: ios/App/My-IPA.ipa
+          files: ios/App/My-IPA.ipa
+          tag_name: v1.0.0
+          name: iOS IPA 安装包
+          body: 由 GitHub Actions 自动构建
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
