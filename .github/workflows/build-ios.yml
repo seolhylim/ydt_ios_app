@@ -1,6 +1,5 @@
-name: Build iOS WITH CERT (Fixed Secrets Name)
-on:
-  workflow_dispatch:
+name: Build iOS WITH CERT (FINAL FIX)
+on: workflow_dispatch
 
 jobs:
   build:
@@ -8,41 +7,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - run: npm install
+      - run: npx cap sync ios
 
-      - name: Cap Sync
-        run: |
-          chmod +x node_modules/.bin/cap
-          npx cap sync ios
-
-      # 证书导入（变量名已和你Secrets里的完全一致）
       - name: Install Certificate & Provision
         run: |
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > cert.p12
           echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > prov.mobileprovision
 
+          # 1. 创建钥匙串
           security create-keychain -p temp123 build.keychain
           security unlock-keychain -p temp123 build.keychain
           security default-keychain -s build.keychain
-          security list-keychains -d user -s build.keychain login.keychain
-          security set-key-partition-list -S apple:,apple-tool:,codesign: -s -k temp123 build.keychain
 
+          # 2. 必须加入这两行，否则GitHub Runner 会拒绝证书
+          security list-keychains -d user -s build.keychain
+          security set-keychain-settings -t 3600 -l build.keychain
+
+          # 3. 导入 p12 时去掉 -A（最关键修复！！！）
           security import cert.p12 \
             -k build.keychain \
             -P "${{ secrets.IOS_P12_PASSWORD }}" \
-            -A -f pkcs12
+            -f pkcs12
 
+          # 4. 安装描述文件
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" prov.mobileprovision)
           cp prov.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      - name: Xcode Archive
+      - name: Archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -57,18 +55,17 @@ jobs:
         run: |
           cd ios/App
           /usr/libexec/PlistBuddy -c "Add :method string development" \
-                               -c "Add :signingStyle string manual" \
-                               -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
-                               -c "Add :compileBitcode bool false" \
-                               export_options.plist
+                                   -c "Add :signingStyle string manual" \
+                                   -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
+                                   -c "Add :compileBitcode bool false" \
+                                   export_options.plist
 
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
-      - name: Upload Signed IPA
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Signed-IPA
           path: ios/App/build/Output/App.ipa
