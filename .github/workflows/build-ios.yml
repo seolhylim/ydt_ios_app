@@ -1,6 +1,5 @@
-name: Build iOS WITH CERT (FINAL)
-on:
-  workflow_dispatch:
+name: Cert Debug
+on: workflow_dispatch
 
 jobs:
   build:
@@ -8,77 +7,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Cap Sync
+      - name: Debug Cert
         run: |
-          chmod +x node_modules/.bin/cap
-          npx cap sync ios
-
-      # ==========================
-      # 证书安装（完整版，必过）
-      # ==========================
-      - name: Install Certificate
-        run: |
-          # 解码
+          echo "=== 1. Decoding p12 ==="
           echo "${{ secrets.IOS_P12_BASE64 }}" | base64 -d > cert.p12
-          echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 -d > prov.mobileprovision
+          ls -la cert.p12
+          file cert.p12
 
-          # 创建钥匙串
+          echo "=== 2. Creating keychain ==="
           security create-keychain -p temp123 build.keychain
           security unlock-keychain -p temp123 build.keychain
           security default-keychain -s build.keychain
-
-          # 🔥 🔥 🔥 这两行是你之前缺失的关键！！！
           security list-keychains -d user -s build.keychain login.keychain
           security set-key-partition-list -S apple:,apple-tool:,codesign: -s -k temp123 build.keychain
 
-          # 导入证书
-          security import cert.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -f pkcs12
-
-          # 安装描述文件
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" prov.mobileprovision)
-          cp prov.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
-
-      # ==========================
-      # 归档（带团队ID）
-      # ==========================
-      - name: Xcode Archive
-        run: |
-          cd ios/App
-          xcodebuild archive \
-            -project App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -archivePath build/App.xcarchive \
-            -destination generic/platform=iOS \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
-
-      # ==========================
-      # 导出签名IPA
-      # ==========================
-      - name: Export IPA
-        run: |
-          cd ios/App
-          /usr/libexec/PlistBuddy -c "Add :method string development" \
-            -c "Add :teamID string ${{ secrets.APPLE_TEAM_ID }}" \
-            -c "Add :signingStyle string automatic" \
-            export.plist
-
-          xcodebuild -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath . \
-            -exportOptionsPlist export.plist
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: Signed-IPA
-          path: ios/App/App.ipa
+          echo "=== 3. Importing p12 ==="
+          security import cert.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -v
+          security find-identity -v build.keychain
