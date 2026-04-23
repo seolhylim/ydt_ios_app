@@ -24,7 +24,6 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # 🔥 🔥 🔥 无签名打包（跳过所有证书错误！）
       - name: Build archive NO SIGNING
         run: |
           cd ios/App
@@ -38,14 +37,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      # 导出 IPA
       - name: Export IPA
         run: |
           cd ios/App
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath build/ipa \
-            -exportOptionsPlist <(echo '{"method":"development","signingStyle":"automatic"}')
+            -exportOptionsPlist ExportOptions.plist
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
