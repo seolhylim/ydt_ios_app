@@ -1,5 +1,7 @@
-name: Build iOS Test
+name: Build iOS FOR SIDELOADLY ✅
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -22,8 +24,8 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # 🔥 临时无签名编译（跳过证书安装，跑通流程）
-      - name: Build archive (NO SIGN)
+      # 🔥 编译成功（你已经验证过）
+      - name: Build archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -35,3 +37,18 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+
+      # 🔥 直接生成 Sideloadly 专用格式 IPA
+      - name: Make Sideloadly IPA
+        run: |
+          cd ios/App
+          mkdir Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -ry9 App.ipa Payload/
+
+      # 🔥 上传可直接安装的包
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: App
+          path: ios/App/App.ipa
