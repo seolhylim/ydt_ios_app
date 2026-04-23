@@ -1,4 +1,4 @@
-name: Build iOS App (Final)
+name: Build iOS App (Final Fixed)
 on:
   workflow_dispatch:
 
@@ -13,8 +13,14 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm install
-      - run: npx cap sync ios
+      - name: Install dependencies
+        run: npm install
+
+      # 🔥 重点：修复cap脚本权限问题
+      - name: Sync iOS project
+        run: |
+          chmod +x ./node_modules/.bin/cap
+          npx cap sync ios
 
       - name: Install Cert & Provision
         run: |
@@ -32,7 +38,7 @@ jobs:
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app.mobileprovision)
           cp app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      - name: Archive
+      - name: Xcode Archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -43,7 +49,7 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
-      # ✅ 用 PlistBuddy 单行生成 plist，彻底避开 XML 语法坑
+      # 🔥 用PlistBuddy生成，彻底避开XML/缩进所有坑
       - name: Export IPA
         run: |
           cd ios/App
