@@ -24,35 +24,27 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # ========== 修复版：证书+描述文件导入（解决SecKeychainItemImport报错） ==========
       - name: Install Cert & Provision
         run: |
-          # 解码文件
           echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > app_dist.p12
           echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 --decode > app_prov.mobileprovision
 
-          # 新建临时钥匙串 + 关闭权限限制
           security create-keychain -p temp12345 sign.keychain
           security unlock-keychain -p temp12345 sign.keychain
           security default-keychain -s sign.keychain
           security set-keychain-settings -t 3600 -l sign.keychain
-
-          # 关键：移除限制，解决参数非法报错
           security list-keychains -d user -s sign.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp12345 sign.keychain
 
-          # 导入P12（去掉致命-A参数，只保留必要参数）
           security import app_dist.p12 \
             -k sign.keychain \
             -P "${{ secrets.IOS_P12_PASSWORD }}" \
             -f pkcs12
 
-          # 安装描述文件
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app_prov.mobileprovision)
           cp app_prov.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      # ========== 带TeamID 正常Archive ==========
       - name: Xcode Archive
         run: |
           cd ios/App
@@ -64,7 +56,6 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
-      # ========== 标准ExportOptions 导出开发版IPA ==========
       - name: Export Standard Signed IPA
         run: |
           cd ios/App
