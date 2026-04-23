@@ -1,6 +1,5 @@
-name: iOS Signed Build (Fixed)
-on:
-  workflow_dispatch
+name: iOS Signed Build
+on: workflow_dispatch
 
 jobs:
   build:
@@ -21,22 +20,21 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 🔥 使用官方动作导入证书，最稳定
+      # 1. 用官方动作安装证书（彻底解决钥匙串问题）
       - name: Install Certificates
         uses: apple-actions/import-codesign-certs@v2
         with:
           p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12 }}
           p12-password: ${{ secrets.IOS_P12_PASSWORD }}
 
-      # 🔥 修复后的描述文件安装步骤
+      # 2. 用官方动作安装描述文件（彻底解决解码问题）
       - name: Install Provisioning Profile
-        run: |
-          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -w 0 | tr -d '\n' > dev.mobileprovision
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision)
-          cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+        uses: apple-actions/import-provisioning-profile@v1
+        with:
+          provisioning-profile-base64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
 
-      - name: Xcode Archive
+      # 3. 编译并签名
+      - name: Xcode Archive & Export
         run: |
           cd ios/App
           xcodebuild archive \
@@ -47,9 +45,6 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
 
-      - name: Export IPA
-        run: |
-          cd ios/App
           /usr/libexec/PlistBuddy -c "Add :method string development" \
             -c "Add :signingStyle string automatic" \
             -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
@@ -60,6 +55,7 @@ jobs:
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
+      # 4. 上传签名IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
