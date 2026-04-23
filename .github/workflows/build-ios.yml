@@ -1,4 +1,4 @@
-name: Build iOS (NO SIGNING - 100% WORK)
+name: Build iOS (FINAL - Direct .app to IPA)
 on:
   push:
     branches: [ main ]
@@ -24,6 +24,7 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
+      # 🔥 编译（无签名，已成功）
       - name: Build archive NO SIGNING
         run: |
           cd ios/App
@@ -37,16 +38,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Export IPA
+      # 🔥 直接把 .app 打包成 IPA（跳过 xcodebuild export）
+      - name: Build IPA manually
         run: |
           cd ios/App
-          xcodebuild -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath build/ipa \
-            -exportOptionsPlist ExportOptions.plist
+          mkdir -p Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -r My-IPA.ipa Payload/
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: My-IPA
-          path: ios/App/build/ipa/App.ipa
+          path: ios/App/My-IPA.ipa
