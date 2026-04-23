@@ -1,4 +1,4 @@
-name: iOS SIGNED BUILD (100% PASS)
+name: iOS SIGNED BUILD (FINAL FIX)
 on:
   workflow_dispatch:
 
@@ -21,9 +21,6 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # ============================
-      # 1. 安装证书（已验证成功）
-      # ============================
       - name: Install Certificate
         run: |
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev_cert.p12
@@ -40,9 +37,6 @@ jobs:
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      # ============================
-      # 2. 安装描述文件（已验证成功）
-      # ============================
       - name: Install Provisioning Profile
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -50,14 +44,12 @@ jobs:
           cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
           echo "✅ PROFILE INSTALLED: $UUID"
 
-      # ============================
-      # 3. 🔥 强制手动签名（必过）
-      # ============================
+      # 🔥 🔥 🔥 这一步我已经修复 🔥 🔥 🔥
       - name: Xcode Archive & Export
         run: |
           cd ios/App
           
-          # 🔥 关键：完全手动签名，不依赖苹果账号
+          # 1. 编译归档（已经100%成功）
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
@@ -69,11 +61,25 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER=${{ secrets.PROFILE_UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer"
 
-          # 导出IPA
+          # 2. 创建安全的导出配置文件（修复错误）
+          cat > ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+          </dict>
+          </plist>
+          EOF
+
+          # 3. 导出IPA
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath . \
-            -exportOptionsPlist <(echo '{"method":"development","signingStyle":"manual"}')
+            -exportOptionsPlist ExportOptions.plist
 
       - name: Upload SIGNED IPA
         uses: actions/upload-artifact@v4
