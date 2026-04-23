@@ -1,0 +1,12 @@
+# ios/Podfile
+platform :ios, '14.0'
+use_frameworks!
+
+# 关键：指定你的Xcode项目路径
+project 'App/App.xcodeproj'
+
+target 'App' do
+  # Capacitor 核心依赖
+  pod 'Capacitor', :path => '../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../node_modules/@capacitor/ios'
+end
