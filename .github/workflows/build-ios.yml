@@ -24,8 +24,26 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # 🔥 编译成功（你已经验证过）
-      - name: Build archive
+      # 1. 创建标准的 ExportOptions.plist 文件
+      - name: Create ExportOptions.plist
+        run: |
+          cat > ios/App/ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+      # 2. 无签名编译（你已经验证过这个能跑通）
+      - name: Build archive NO SIGNING
         run: |
           cd ios/App
           xcodebuild archive \
@@ -38,17 +56,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      # 🔥 直接生成 Sideloadly 专用格式 IPA
-      - name: Make Sideloadly IPA
+      # 3. 用标准 xcodebuild 方式导出 IPA
+      - name: Export standard IPA
         run: |
           cd ios/App
-          mkdir Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
-          zip -ry9 App.ipa Payload/
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist ExportOptions.plist
 
-      # 🔥 上传可直接安装的包
-      - name: Upload
+      # 4. 上传最终的标准 IPA
+      - name: Upload Standard IPA
         uses: actions/upload-artifact@v4
         with:
           name: App
-          path: ios/App/App.ipa
+          path: ios/App/build/ipa/App.ipa
