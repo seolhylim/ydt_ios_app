@@ -1,4 +1,4 @@
-name: Build iOS STANDARD (for Sideloadly)
+name: Build iOS OFFICIAL (✅ 证书签名版)
 on:
   push:
     branches: [ main ]
@@ -24,8 +24,29 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 编译生成 xcarchive（标准方式）
-      - name: Build archive
+      # ==========================================
+      # 安装证书 + 描述文件（你自己的文件）
+      # ==========================================
+      - name: Install Certificate & Provision
+        run: |
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > ydt_distribution.p12
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > ydt_discription.mobileprovision
+
+          # 创建钥匙串
+          security create-keychain -p temp123 temp.keychain
+          security default-keychain -s temp.keychain
+          security unlock-keychain -p temp123 temp.keychain
+          security import ydt_distribution.p12 -k temp.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -f pkcs12
+
+          # 安装描述文件
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" ydt_discription.mobileprovision)
+          cp ydt_discription.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+
+      # ==========================================
+      # 正式打包（使用你的证书签名）
+      # ==========================================
+      - name: Build & Archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -33,25 +54,29 @@ jobs:
             -scheme App \
             -configuration Release \
             -archivePath build/App.xcarchive \
-            -destination generic/platform=iOS
+            -destination generic/platform=iOS \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
 
-      # 2. 标准导出 IPA（Sideloadly 100% 兼容）
-      - name: Export standard IPA
+      # ==========================================
+      # 标准导出 IPA
+      # ==========================================
+      - name: Export IPA
         run: |
           cd ios/App
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath build/ipa \
             -exportOptionsPlist <(echo '{
-              "destination":"export",
-              "method":"development",
-              "signingStyle":"automatic",
+              "method":"ad-hoc",
+              "signingStyle":"manual",
               "compileBitcode":false
             }')
 
-      # 3. 上传标准 IPA
-      - name: Upload Standard IPA
+      # ==========================================
+      # 上传最终可安装 IPA
+      # ==========================================
+      - name: Upload Final IPA
         uses: actions/upload-artifact@v4
         with:
-          name: My-IPA-Standard
+          name: Final-IPA
           path: ios/App/build/ipa/App.ipa
