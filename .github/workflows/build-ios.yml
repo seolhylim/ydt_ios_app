@@ -1,4 +1,4 @@
-name: iOS Signed Build
+name: iOS Signed Build (Fastlane)
 on: workflow_dispatch
 
 jobs:
@@ -20,20 +20,33 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 用官方动作安装证书（彻底解决钥匙串问题）
-      - name: Install Certificates
-        uses: apple-actions/import-codesign-certs@v2
-        with:
-          p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12 }}
-          p12-password: ${{ secrets.IOS_P12_PASSWORD }}
+      # 安装 Fastlane（官方推荐的 CI 工具）
+      - name: Install Fastlane
+        run: |
+          gem install fastlane
 
-      # 2. 用官方动作安装描述文件（彻底解决解码问题）
-      - name: Install Provisioning Profile
-        uses: apple-actions/import-provisioning-profile@v1
-        with:
-          provisioning-profile-base64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+      # 配置 Fastlane 环境变量
+      - name: Setup Fastlane Env
+        run: |
+          echo "APPLE_KEYCHAIN_PASSWORD=temp123" >> $GITHUB_ENV
+          echo "IOS_P12_BASE64=${{ secrets.IOS_DISTRIBUTION_P12 }}" >> $GITHUB_ENV
+          echo "IOS_P12_PASSWORD=${{ secrets.IOS_P12_PASSWORD }}" >> $GITHUB_ENV
+          echo "IOS_PROVISIONING_PROFILE_BASE64=${{ secrets.IOS_PROVISIONING_PROFILE }}" >> $GITHUB_ENV
 
-      # 3. 编译并签名
+      # 用 Fastlane 安装证书和描述文件（最稳定的方式）
+      - name: Fastlane Match Setup
+        run: |
+          cd ios/App
+          fastlane run import_cert \
+            cert_data:"${{ secrets.IOS_DISTRIBUTION_P12 }}" \
+            cert_password:"${{ secrets.IOS_P12_PASSWORD }}" \
+            keychain_name:"fastlane-build.keychain" \
+            keychain_password:"temp123"
+
+          fastlane run import_provisioning_profile \
+            profile_data:"${{ secrets.IOS_PROVISIONING_PROFILE }}"
+
+      # 编译并导出 IPA
       - name: Xcode Archive & Export
         run: |
           cd ios/App
@@ -55,7 +68,6 @@ jobs:
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
-      # 4. 上传签名IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
