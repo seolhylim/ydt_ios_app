@@ -1,4 +1,4 @@
-name: iOS Official Signed Build (FINAL NO BASE64)
+name: iOS Official Signed Build (FINAL)
 on: workflow_dispatch
 
 jobs:
@@ -20,30 +20,29 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 安装证书
+      # 安装证书
       - name: Install Certificate
         run: |
-          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > cert.p12
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev.p12
 
           security create-keychain -p "123456" build.keychain
           security unlock-keychain -p "123456" build.keychain
           security list-keychains -d user -s build.keychain login.keychain
-          security import cert.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -f pkcs12 -A
+          security import dev.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -f pkcs12 -A
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      # 2. 安装描述文件（直接用仓库里的原始文件，不再解码！）
+      # 安装描述文件（已修正文件名）
       - name: Install Provisioning Profile
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           
-          # 直接使用仓库根目录的文件
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" Dev_App.mobileprovision 2>/dev/null || security cms -D -i Dev_App.mobileprovision | plutil -extract UUID raw -o - -)
-          cp Dev_App.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" Dev_App_ydt.mobileprovision 2>/dev/null || security cms -D -i Dev_App_ydt.mobileprovision | plutil -extract UUID raw -o - -)
+          cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 
           echo "✅ Profile installed: $UUID.mobileprovision"
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
-      # 3. 编译并签名
+      # 编译并签名
       - name: Xcode Archive & Export
         run: |
           cd ios/App
@@ -61,7 +60,7 @@ jobs:
             -exportPath ./build/Output \
             -exportOptionsPlist <(echo '{"method":"development","signingStyle":"automatic"}')
 
-      # 4. 上传签名IPA
+      # 上传签名IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
