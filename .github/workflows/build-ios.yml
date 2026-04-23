@@ -1,4 +1,4 @@
-name: iOS Official Signed Build (FINAL FINAL)
+name: iOS Official Signed Build (FINAL NO BASE64)
 on: workflow_dispatch
 
 jobs:
@@ -28,23 +28,17 @@ jobs:
           security create-keychain -p "123456" build.keychain
           security unlock-keychain -p "123456" build.keychain
           security list-keychains -d user -s build.keychain login.keychain
-          security set-keychain-settings -lut 3600 build.keychain
-
-          security import cert.p12 \
-            -k build.keychain \
-            -P "${{ secrets.IOS_P12_PASSWORD }}" \
-            -f pkcs12 -A
-
+          security import cert.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -f pkcs12 -A
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      # 2. 安装描述文件（修复路径问题）
+      # 2. 安装描述文件（直接用仓库里的原始文件，不再解码！）
       - name: Install Provisioning Profile
         run: |
-          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | tr -d '\r' | base64 -d > dev.mobileprovision
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision 2>/dev/null || security cms -D -i dev.mobileprovision | plutil -extract UUID raw -o - -)
-          cp dev.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          # 直接使用仓库根目录的文件
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" Dev_App.mobileprovision 2>/dev/null || security cms -D -i Dev_App.mobileprovision | plutil -extract UUID raw -o - -)
+          cp Dev_App.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 
           echo "✅ Profile installed: $UUID.mobileprovision"
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/"
@@ -60,8 +54,7 @@ jobs:
             -archivePath ./build/App.xcarchive \
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
-            CODE_SIGN_STYLE=Automatic \
-            -allowProvisioningUpdates
+            CODE_SIGN_STYLE=Automatic
 
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
