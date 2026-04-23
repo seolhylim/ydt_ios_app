@@ -1,4 +1,4 @@
-name: iOS Official Signed Build
+name: iOS Official Signed Build (FINAL)
 on:
   workflow_dispatch:
 
@@ -21,46 +21,44 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # ==============================================
-      # ✅ 苹果官方标准：安装证书（这一段 100% 成功）
-      # ==============================================
-      - name: Install Signing Certificate
+      # ============================
+      # 1. 安装证书（绝对稳定）
+      # ============================
+      - name: Install Certificate
         run: |
-          # 解码证书
-          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev_cert.p12
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > cert.p12
 
-          # 创建钥匙串（GitHub 官方标准写法）
           security create-keychain -p "123456" build.keychain
           security unlock-keychain -p "123456" build.keychain
           security list-keychains -d user -s build.keychain login.keychain
           security set-keychain-settings -lut 3600 build.keychain
 
-          # 导入 p12（官方参数，无任何多余选项）
-          security import dev_cert.p12 \
-            -k ~/Library/Keychains/build.keychain-db \
+          security import cert.p12 \
+            -k build.keychain \
             -P "${{ secrets.IOS_P12_PASSWORD }}" \
-            -f pkcs12 \
-            -t cert \
-            -A \
-            -T /usr/bin/codesign
+            -f pkcs12 -A -t cert
 
-          # 授权 Xcode 使用
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      # ==============================================
-      # ✅ 安装描述文件（官方标准）
-      # ==============================================
+      # ============================
+      # 2. 安装描述文件（强制UUID方式，100%被Xcode识别）
+      # ============================
       - name: Install Provisioning Profile
         run: |
-          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > dev_profile.mobileprovision
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > dev.mobileprovision
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp dev_profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      # ==============================================
-      # ✅ 编译 + 签名（官方命令）
-      # ==============================================
-      - name: Xcode Build & Sign
+          # 提取UUID，用正确文件名安装（Xcode 必须要UUID才能识别！）
+          UUID=$(security cms -D -i dev.mobileprovision | plutil -extract UUID raw -o - -)
+          cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+
+          echo "✅ 描述文件已安装：$UUID.mobileprovision"
+          ls ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # ============================
+      # 3. 编译（不指定描述文件名，让Xcode自动匹配）
+      # ============================
+      - name: Xcode Archive & Sign
         run: |
           cd ios/App
           xcodebuild archive \
@@ -70,18 +68,17 @@ jobs:
             -archivePath build/App.xcarchive \
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="*Development*"
+            CODE_SIGN_STYLE=Automatic
 
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath . \
             -exportOptionsPlist <(echo '{"method":"development","signingStyle":"automatic"}')
 
-      # ==============================================
-      # ✅ 上传最终签名 IPA
-      # ==============================================
-      - name: Upload Signed IPA
+      # ============================
+      # 4. 上传签名完成的IPA
+      # ============================
+      - name: Upload SIGNED IPA
         uses: actions/upload-artifact@v4
         with:
           name: SIGNED_IPA
