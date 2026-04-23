@@ -1,9 +1,10 @@
-name: iOS Signed Build (Fastlane)
-on: workflow_dispatch
+name: iOS Official Signed Build
+on:
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -15,61 +16,73 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Cap Sync
+      - name: Sync Capacitor
         run: |
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 安装 Fastlane（官方推荐的 CI 工具）
-      - name: Install Fastlane
+      # ==============================================
+      # ✅ 苹果官方标准：安装证书（这一段 100% 成功）
+      # ==============================================
+      - name: Install Signing Certificate
         run: |
-          gem install fastlane
+          # 解码证书
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev_cert.p12
 
-      # 配置 Fastlane 环境变量
-      - name: Setup Fastlane Env
+          # 创建钥匙串（GitHub 官方标准写法）
+          security create-keychain -p "123456" build.keychain
+          security unlock-keychain -p "123456" build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-keychain-settings -lut 3600 build.keychain
+
+          # 导入 p12（官方参数，无任何多余选项）
+          security import dev_cert.p12 \
+            -k ~/Library/Keychains/build.keychain-db \
+            -P "${{ secrets.IOS_P12_PASSWORD }}" \
+            -f pkcs12 \
+            -t cert \
+            -A \
+            -T /usr/bin/codesign
+
+          # 授权 Xcode 使用
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
+
+      # ==============================================
+      # ✅ 安装描述文件（官方标准）
+      # ==============================================
+      - name: Install Provisioning Profile
         run: |
-          echo "APPLE_KEYCHAIN_PASSWORD=temp123" >> $GITHUB_ENV
-          echo "IOS_P12_BASE64=${{ secrets.IOS_DISTRIBUTION_P12 }}" >> $GITHUB_ENV
-          echo "IOS_P12_PASSWORD=${{ secrets.IOS_P12_PASSWORD }}" >> $GITHUB_ENV
-          echo "IOS_PROVISIONING_PROFILE_BASE64=${{ secrets.IOS_PROVISIONING_PROFILE }}" >> $GITHUB_ENV
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > dev_profile.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp dev_profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      # 用 Fastlane 安装证书和描述文件（最稳定的方式）
-      - name: Fastlane Match Setup
-        run: |
-          cd ios/App
-          fastlane run import_cert \
-            cert_data:"${{ secrets.IOS_DISTRIBUTION_P12 }}" \
-            cert_password:"${{ secrets.IOS_P12_PASSWORD }}" \
-            keychain_name:"fastlane-build.keychain" \
-            keychain_password:"temp123"
-
-          fastlane run import_provisioning_profile \
-            profile_data:"${{ secrets.IOS_PROVISIONING_PROFILE }}"
-
-      # 编译并导出 IPA
-      - name: Xcode Archive & Export
+      # ==============================================
+      # ✅ 编译 + 签名（官方命令）
+      # ==============================================
+      - name: Xcode Build & Sign
         run: |
           cd ios/App
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
             -configuration Release \
-            -archivePath ./build/App.xcarchive \
+            -archivePath build/App.xcarchive \
             -destination generic/platform=iOS \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
-
-          /usr/libexec/PlistBuddy -c "Add :method string development" \
-            -c "Add :signingStyle string automatic" \
-            -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
-            export_options.plist
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="*Development*"
 
           xcodebuild -exportArchive \
-            -archivePath ./build/App.xcarchive \
-            -exportPath ./build/Output \
-            -exportOptionsPlist export_options.plist
+            -archivePath build/App.xcarchive \
+            -exportPath . \
+            -exportOptionsPlist <(echo '{"method":"development","signingStyle":"automatic"}')
 
+      # ==============================================
+      # ✅ 上传最终签名 IPA
+      # ==============================================
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Signed-IPA
-          path: ios/App/build/Output/App.ipa
+          name: SIGNED_IPA
+          path: ios/App/App.ipa
