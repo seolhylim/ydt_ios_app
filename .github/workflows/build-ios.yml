@@ -1,4 +1,4 @@
-name: iOS Official Signed Build
+name: iOS Official Signed Build (FINAL NO ACTIONS)
 on: workflow_dispatch
 
 jobs:
@@ -20,20 +20,38 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 使用官方动作安装证书（稳定无坑）
-      - name: Install Certificates
-        uses: apple-actions/import-codesign-certs@v2
-        with:
-          p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12 }}
-          p12-password: ${{ secrets.IOS_P12_PASSWORD }}
+      # 1. 安装证书（纯原生，官方标准写法）
+      - name: Install Certificate
+        run: |
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > cert.p12
 
-      # 2. 使用官方动作安装描述文件（修复了你的 base64 解析问题）
+          security create-keychain -p "123456" build.keychain
+          security unlock-keychain -p "123456" build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-keychain-settings -lut 3600 build.keychain
+
+          security import cert.p12 \
+            -k build.keychain \
+            -P "${{ secrets.IOS_P12_PASSWORD }}" \
+            -f pkcs12 -A
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
+
+      # 2. 安装描述文件（终极解码，解决Windows base64问题）
       - name: Install Provisioning Profile
-        uses: apple-actions/import-provisioning-profile@v1
-        with:
-          provisioning-profile-base64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          # 关键：清除Windows控制字符，100%解码成功
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | tr -d '\r' | base64 -d > dev.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          
+          # 提取UUID，用正确路径安装
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision 2>/dev/null || security cms -D -i dev.mobileprovision | plutil -extract UUID raw -o - -)
+          cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      # 3. 编译并签名
+          echo "✅ Profile installed: $UUID.mobileprovision"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # 3. 编译并签名（自动匹配描述文件）
       - name: Xcode Archive & Export
         run: |
           cd ios/App
@@ -43,19 +61,16 @@ jobs:
             -configuration Release \
             -archivePath ./build/App.xcarchive \
             -destination generic/platform=iOS \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
-
-          /usr/libexec/PlistBuddy -c "Add :method string development" \
-            -c "Add :signingStyle string automatic" \
-            -c "Add :teamID string ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}" \
-            export_options.plist
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates
 
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
             -exportPath ./build/Output \
-            -exportOptionsPlist export_options.plist
+            -exportOptionsPlist <(echo '{"method":"development","signingStyle":"automatic"}')
 
-      # 4. 上传最终签名IPA
+      # 4. 上传签名IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
