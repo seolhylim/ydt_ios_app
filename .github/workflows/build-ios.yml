@@ -1,14 +1,12 @@
-name: Build iOS 正式签名(真机+TestFlight通用)
+name: Build iOS App
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -19,31 +17,31 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Cap Sync iOS
+      - name: Sync iOS project
         run: |
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      - name: Install Cert & Provision
+      - name: Install Certificate & Provision
         run: |
-          echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > app_dist.p12
-          echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 --decode > app_prov.mobileprovision
+          echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > app.p12
+          echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 --decode > app.mobileprovision
 
-          security create-keychain -p temp12345 sign.keychain
-          security unlock-keychain -p temp12345 sign.keychain
-          security default-keychain -s sign.keychain
-          security set-keychain-settings -t 3600 -l sign.keychain
-          security list-keychains -d user -s sign.keychain
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp12345 sign.keychain
+          security create-keychain -p temp12345 build.keychain
+          security unlock-keychain -p temp12345 build.keychain
+          security default-keychain -s build.keychain
+          security set-keychain-settings -t 3600 -l build.keychain
+          security list-keychains -d user -s build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp12345 build.keychain
 
-          security import app_dist.p12 \
-            -k sign.keychain \
+          security import app.p12 \
+            -k build.keychain \
             -P "${{ secrets.IOS_P12_PASSWORD }}" \
             -f pkcs12
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app_prov.mobileprovision)
-          cp app_prov.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app.mobileprovision)
+          cp app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
       - name: Xcode Archive
         run: |
@@ -56,10 +54,10 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Export Standard Signed IPA
+      - name: Export IPA
         run: |
           cd ios/App
-          cat > export_options.plist <<EOF
+          cat > export_options.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -81,8 +79,8 @@ EOF
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
-      - name: Upload 签名成品IPA
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Signed-IPA-Release
+          name: App.ipa
           path: ios/App/build/Output/App.ipa
