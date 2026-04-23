@@ -24,9 +24,6 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      # ==========================================
-      # 🔥 🔥 🔥 【绝对正确的证书+描述文件安装】
-      # ==========================================
       - name: Install p12 & Provisioning Profile
         run: |
           # 1. 解码证书和描述文件
@@ -40,14 +37,11 @@ jobs:
           security set-keychain-settings -lut 21600 temp.keychain
           security import dist.p12 -k temp.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -f pkcs12
 
-          # 3. 【核心修复】安装描述文件（必须用 UUID 命名）
+          # 3. 【核心修复】安装描述文件（用 PlistBuddy 读取 UUID）
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(defaults read ~/profile.mobileprovision UUID 2>/dev/null)
+          UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" profile.mobileprovision)
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      # ==========================================
-      # 🔥 打包命令（增加自动签名开关）
-      # ==========================================
       - name: Build archive
         run: |
           cd ios/App
@@ -60,9 +54,6 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
             -allowProvisioningUpdates
 
-      # ==========================================
-      # 导出 IPA
-      # ==========================================
       - name: Export IPA
         run: |
           cd ios/App
