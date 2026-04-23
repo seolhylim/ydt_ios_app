@@ -1,4 +1,4 @@
-name: Build iOS App (Final Fixed)
+name: Build iOS WITH CERT (FINAL)
 on:
   workflow_dispatch:
 
@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -16,28 +16,40 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 🔥 重点：修复cap脚本权限问题
-      - name: Sync iOS project
+      - name: Cap Sync
         run: |
-          chmod +x ./node_modules/.bin/cap
+          chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      - name: Install Cert & Provision
+      # ==========================
+      # 证书安装（完整版，必过）
+      # ==========================
+      - name: Install Certificate
         run: |
-          echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > app.p12
-          echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 --decode > app.mobileprovision
+          # 解码
+          echo "${{ secrets.IOS_P12_BASE64 }}" | base64 -d > cert.p12
+          echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 -d > prov.mobileprovision
 
-          security create-keychain -p temp12345 build.keychain
-          security unlock-keychain -p temp12345 build.keychain
+          # 创建钥匙串
+          security create-keychain -p temp123 build.keychain
+          security unlock-keychain -p temp123 build.keychain
           security default-keychain -s build.keychain
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp12345 build.keychain
 
-          security import app.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -f pkcs12
+          # 🔥 🔥 🔥 这两行是你之前缺失的关键！！！
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-key-partition-list -S apple:,apple-tool:,codesign: -s -k temp123 build.keychain
 
+          # 导入证书
+          security import cert.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -f pkcs12
+
+          # 安装描述文件
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app.mobileprovision)
-          cp app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" prov.mobileprovision)
+          cp prov.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
+      # ==========================
+      # 归档（带团队ID）
+      # ==========================
       - name: Xcode Archive
         run: |
           cd ios/App
@@ -45,27 +57,28 @@ jobs:
             -project App.xcodeproj \
             -scheme App \
             -configuration Release \
-            -archivePath ./build/App.xcarchive \
+            -archivePath build/App.xcarchive \
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
-      # 🔥 用PlistBuddy生成，彻底避开XML/缩进所有坑
+      # ==========================
+      # 导出签名IPA
+      # ==========================
       - name: Export IPA
         run: |
           cd ios/App
           /usr/libexec/PlistBuddy -c "Add :method string development" \
-                               -c "Add :signingStyle string manual" \
-                               -c "Add :teamID string ${{ secrets.APPLE_TEAM_ID }}" \
-                               -c "Add :compileBitcode bool false" \
-                               export_options.plist
+            -c "Add :teamID string ${{ secrets.APPLE_TEAM_ID }}" \
+            -c "Add :signingStyle string automatic" \
+            export.plist
 
           xcodebuild -exportArchive \
-            -archivePath ./build/App.xcarchive \
-            -exportPath ./build/Output \
-            -exportOptionsPlist export_options.plist
+            -archivePath build/App.xcarchive \
+            -exportPath . \
+            -exportOptionsPlist export.plist
 
-      - name: Upload IPA
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: App.ipa
-          path: ios/App/build/Output/App.ipa
+          name: Signed-IPA
+          path: ios/App/App.ipa
