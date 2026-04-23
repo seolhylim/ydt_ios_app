@@ -1,4 +1,4 @@
-name: Build iOS App
+name: Build iOS App (Final)
 on:
   workflow_dispatch:
 
@@ -6,23 +6,17 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - run: npm install
+      - run: npx cap sync ios
 
-      - name: Sync iOS project
-        run: |
-          chmod +x ./node_modules/.bin/cap
-          npx cap sync ios
-
-      - name: Install Certificate & Provision
+      - name: Install Cert & Provision
         run: |
           echo "${{ secrets.IOS_P12_BASE64 }}" | base64 --decode > app.p12
           echo "${{ secrets.IOS_PROV_BASE64 }}" | base64 --decode > app.mobileprovision
@@ -30,20 +24,15 @@ jobs:
           security create-keychain -p temp12345 build.keychain
           security unlock-keychain -p temp12345 build.keychain
           security default-keychain -s build.keychain
-          security set-keychain-settings -t 3600 -l build.keychain
-          security list-keychains -d user -s build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp12345 build.keychain
 
-          security import app.p12 \
-            -k build.keychain \
-            -P "${{ secrets.IOS_P12_PASSWORD }}" \
-            -f pkcs12
+          security import app.p12 -k build.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -f pkcs12
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" app.mobileprovision)
           cp app.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
-      - name: Xcode Archive
+      - name: Archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -54,25 +43,15 @@ jobs:
             -destination generic/platform=iOS \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
+      # ✅ 用 PlistBuddy 单行生成 plist，彻底避开 XML 语法坑
       - name: Export IPA
         run: |
           cd ios/App
-          cat > export_options.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key>
-    <string>development</string>
-    <key>signingStyle</key>
-    <string>manual</string>
-    <key>teamID</key>
-    <string>${{ secrets.APPLE_TEAM_ID }}</string>
-    <key>compileBitcode</key>
-    <false/>
-</dict>
-</plist>
-EOF
+          /usr/libexec/PlistBuddy -c "Add :method string development" \
+                               -c "Add :signingStyle string manual" \
+                               -c "Add :teamID string ${{ secrets.APPLE_TEAM_ID }}" \
+                               -c "Add :compileBitcode bool false" \
+                               export_options.plist
 
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
