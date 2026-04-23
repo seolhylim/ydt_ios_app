@@ -1,6 +1,5 @@
-name: iOS SIGNED BUILD (FINAL FIX)
-on:
-  workflow_dispatch:
+name: iOS Final Signed Build (Export Fix)
+on: workflow_dispatch
 
 jobs:
   build:
@@ -44,12 +43,11 @@ jobs:
           cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
           echo "✅ PROFILE INSTALLED: $UUID"
 
-      # 🔥 🔥 🔥 这一步我已经修复 🔥 🔥 🔥
-      - name: Xcode Archive & Export
+      - name: Xcode Archive
         run: |
           cd ios/App
           
-          # 1. 编译归档（已经100%成功）
+          # 1. 编译归档（已验证成功）
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
@@ -61,27 +59,43 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER=${{ secrets.PROFILE_UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer"
 
-          # 2. 创建安全的导出配置文件（修复错误）
+      # --------------------------
+      # 关键修复：导出步骤
+      # --------------------------
+      - name: Prepare ExportOptions.plist
+        run: |
+          cd ios/App
+          # 创建一个完整的导出配置文件
           cat > ExportOptions.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>development</string>
+              <string>debugging</string>
               <key>signingStyle</key>
               <string>manual</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_DEVELOPER_TEAM_ID }}</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.app.ydt</key>
+                  <string>${{ secrets.PROFILE_UUID }}</string>
+              </dict>
           </dict>
           </plist>
           EOF
 
-          # 3. 导出IPA
+      - name: Export IPA
+        run: |
+          cd ios/App
+          # 直接使用配置文件导出
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath . \
             -exportOptionsPlist ExportOptions.plist
 
-      - name: Upload SIGNED IPA
+      - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
           name: SIGNED_IPA
