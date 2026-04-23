@@ -20,20 +20,18 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 安装证书（官方动作，稳定无坑）
+      # 1. 使用官方动作安装证书（稳定无坑）
       - name: Install Certificates
         uses: apple-actions/import-codesign-certs@v2
         with:
           p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12 }}
           p12-password: ${{ secrets.IOS_P12_PASSWORD }}
 
-      # 2. 安装描述文件（用你正确生成的 base64）
+      # 2. 使用官方动作安装描述文件（修复了你的 base64 解析问题）
       - name: Install Provisioning Profile
-        run: |
-          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > dev.mobileprovision
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision)
-          cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+        uses: apple-actions/import-provisioning-profile@v1
+        with:
+          provisioning-profile-base64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
 
       # 3. 编译并签名
       - name: Xcode Archive & Export
@@ -57,7 +55,7 @@ jobs:
             -exportPath ./build/Output \
             -exportOptionsPlist export_options.plist
 
-      # 4. 上传最终IPA
+      # 4. 上传最终签名IPA
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
         with:
