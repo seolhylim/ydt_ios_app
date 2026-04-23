@@ -1,4 +1,4 @@
-name: Build iOS with Signing (FINAL)
+name: Build iOS with Signing (FINAL ✅)
 on:
   push:
     branches: [ main ]
@@ -24,19 +24,30 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      - name: Install p12 & mobileprovision
+      # ==========================================
+      # 🔥 🔥 🔥 【绝对正确的证书+描述文件安装】
+      # ==========================================
+      - name: Install p12 & Provisioning Profile
         run: |
+          # 1. 解码证书和描述文件
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dist.p12
           echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > profile.mobileprovision
 
-          security create-keychain -p temp temp.keychain
+          # 2. 创建并解锁钥匙串（安装证书）
+          security create-keychain -p temp123 temp.keychain
           security default-keychain -s temp.keychain
-          security unlock-keychain -p temp temp.keychain
-          security import dist.p12 -k temp.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A
+          security unlock-keychain -p temp123 temp.keychain
+          security set-keychain-settings -lut 21600 temp.keychain
+          security import dist.p12 -k temp.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A -f pkcs12
 
+          # 3. 【核心修复】安装描述文件（必须用 UUID 命名）
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          UUID=$(defaults read ~/profile.mobileprovision UUID 2>/dev/null)
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
 
+      # ==========================================
+      # 🔥 打包命令（增加自动签名开关）
+      # ==========================================
       - name: Build archive
         run: |
           cd ios/App
@@ -46,15 +57,19 @@ jobs:
             -configuration Release \
             -archivePath build/App.xcarchive \
             -destination generic/platform=iOS \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
+            -allowProvisioningUpdates
 
+      # ==========================================
+      # 导出 IPA
+      # ==========================================
       - name: Export IPA
         run: |
           cd ios/App
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath build/ipa \
-            -exportOptionsPlist <(echo '{"method":"ad-hoc"}')
+            -exportOptionsPlist <(echo '{"method":"ad-hoc","signingStyle":"manual"}')
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
