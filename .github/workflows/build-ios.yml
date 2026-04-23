@@ -1,0 +1,61 @@
+name: Build iOS with Signing (FINAL)
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Sync iOS project
+        run: npx cap sync ios
+
+      - name: Install p12 & mobileprovision
+        run: |
+          echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dist.p12
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 -d > profile.mobileprovision
+
+          security create-keychain -p temp temp.keychain
+          security default-keychain -s temp.keychain
+          security unlock-keychain -p temp temp.keychain
+          security import dist.p12 -k temp.keychain -P "${{ secrets.IOS_P12_PASSWORD }}" -A
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build archive
+        run: |
+          cd ios/App
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath build/App.xcarchive \
+            -destination generic/platform=iOS \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
+
+      - name: Export IPA
+        run: |
+          cd ios/App
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist <(echo '{"method":"ad-hoc"}')
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: My-IPA
+          path: ios/App/build/ipa/App.ipa
