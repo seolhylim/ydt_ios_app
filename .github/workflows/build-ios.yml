@@ -1,4 +1,4 @@
-name: Build iOS + Upload to Release
+name: Build iOS STANDARD (for Sideloadly)
 on:
   push:
     branches: [ main ]
@@ -24,7 +24,8 @@ jobs:
           chmod +x ./node_modules/.bin/cap
           npx cap sync ios
 
-      - name: Build archive NO SIGNING
+      # 1. 编译生成 xcarchive（标准方式）
+      - name: Build archive
         run: |
           cd ios/App
           xcodebuild archive \
@@ -32,25 +33,25 @@ jobs:
             -scheme App \
             -configuration Release \
             -archivePath build/App.xcarchive \
-            -destination generic/platform=iOS \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            -destination generic/platform=iOS
 
-      - name: Build IPA manually
+      # 2. 标准导出 IPA（Sideloadly 100% 兼容）
+      - name: Export standard IPA
         run: |
           cd ios/App
-          mkdir -p Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
-          zip -r My-IPA.ipa Payload/
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist <(echo '{
+              "destination":"export",
+              "method":"development",
+              "signingStyle":"automatic",
+              "compileBitcode":false
+            }')
 
-      # 🔥 自动发布到 GitHub Releases（下载超级快）
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v2
+      # 3. 上传标准 IPA
+      - name: Upload Standard IPA
+        uses: actions/upload-artifact@v4
         with:
-          files: ios/App/My-IPA.ipa
-          tag_name: v1.0.0
-          name: iOS IPA 安装包
-          body: 由 GitHub Actions 自动构建
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: My-IPA-Standard
+          path: ios/App/build/ipa/App.ipa
