@@ -1,4 +1,4 @@
-name: iOS Official Signed Build (FINAL NO ACTIONS)
+name: iOS Official Signed Build (FINAL FINAL)
 on: workflow_dispatch
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
           chmod +x node_modules/.bin/cap
           npx cap sync ios
 
-      # 1. 安装证书（纯原生，官方标准写法）
+      # 1. 安装证书
       - name: Install Certificate
         run: |
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > cert.p12
@@ -37,21 +37,19 @@ jobs:
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      # 2. 安装描述文件（终极解码，解决Windows base64问题）
+      # 2. 安装描述文件（修复路径问题）
       - name: Install Provisioning Profile
         run: |
-          # 关键：清除Windows控制字符，100%解码成功
           echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | tr -d '\r' | base64 -d > dev.mobileprovision
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           
-          # 提取UUID，用正确路径安装
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" dev.mobileprovision 2>/dev/null || security cms -D -i dev.mobileprovision | plutil -extract UUID raw -o - -)
-          cp dev.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          cp dev.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 
           echo "✅ Profile installed: $UUID.mobileprovision"
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
-      # 3. 编译并签名（自动匹配描述文件）
+      # 3. 编译并签名
       - name: Xcode Archive & Export
         run: |
           cd ios/App
