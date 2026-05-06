@@ -36,18 +36,24 @@ jobs:
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
 
-      - name: Install Provisioning Profile
+      - name: Install Provisioning Profile & AUTO GET UUID
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" Dev_App_ydt.mobileprovision 2>/dev/null || security cms -D -i Dev_App_ydt.mobileprovision | plutil -extract UUID raw -o - -)
+          
+          # 自动从新描述文件中提取 UUID（你不需要再管了！）
+          UUID=$(security cms -D -i Dev_App_ydt.mobileprovision | plutil -extract UUID raw -o - -)
+          echo "NEW UUID = $UUID"
+          
           cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
           echo "✅ PROFILE INSTALLED: $UUID"
+          
+          # 把自动获取的 UUID 写入环境变量
+          echo "UUID=$UUID" >> $GITHUB_ENV
 
       - name: Xcode Archive
         run: |
           cd ios/App
           
-          # 1. 编译归档（已验证成功）
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
@@ -56,16 +62,12 @@ jobs:
             -destination generic/platform=iOS \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
-            PROVISIONING_PROFILE_SPECIFIER=${{ secrets.PROFILE_UUID }} \
+            PROVISIONING_PROFILE_SPECIFIER=${{ env.UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer"
 
-      # --------------------------
-      # 关键修复：导出步骤
-      # --------------------------
       - name: Prepare ExportOptions.plist
         run: |
           cd ios/App
-          # 创建一个完整的导出配置文件
           cat > ExportOptions.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -80,7 +82,7 @@ jobs:
               <key>provisioningProfiles</key>
               <dict>
                   <key>com.app.ydt</key>
-                  <string>${{ secrets.PROFILE_UUID }}</string>
+                  <string>${{ env.UUID }}</string>
               </dict>
           </dict>
           </plist>
@@ -89,7 +91,6 @@ jobs:
       - name: Export IPA
         run: |
           cd ios/App
-          # 直接使用配置文件导出
           xcodebuild -exportArchive \
             -archivePath build/App.xcarchive \
             -exportPath . \
