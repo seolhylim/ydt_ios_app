@@ -1,5 +1,9 @@
 {
   "appId": "com.app.ydt",
   "appName": "ydt",
-  "webDir": "public"
+  "webDir": "public",
+  "server": {
+    "hostname": "www.fllya.com",
+    "iosScheme": "https"
+  }
 }
