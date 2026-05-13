@@ -53,8 +53,8 @@ jobs:
       - name: Force Merge Entitlements
         run: |
           cd ios/App
-          PlistBuddy -c "Add :com.apple.developer.associated-domains array" App/App.entitlements
-          PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:www.fllya.com" App/App.entitlements
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" App/App.entitlements || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:www.fllya.com" App/App.entitlements || true
 
       - name: Xcode Archive
         run: |
