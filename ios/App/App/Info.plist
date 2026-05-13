@@ -49,6 +49,16 @@
 	<array>
 	  <string>weixin</string>
 	  <string>wechat</string>
+	      <string>wx</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+	    <dict>
+	        <key>CFBundleURLSchemes</key>
+	        <array>
+	            <string>wxaf934ec01ec6f1d8</string>
+	        </array>
+	    </dict>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
