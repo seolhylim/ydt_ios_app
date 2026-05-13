@@ -64,8 +64,7 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
             PROVISIONING_PROFILE_SPECIFIER=${{ env.UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer" \
-            OTHER_CFLAGS=-DDEBUG \
-            CODE_SIGN_ENTITLEMENTS=App/App.entitlements
+            OTHER_CFLAGS=-DDEBUG
 
       - name: Prepare ExportOptions.plist
         run: |
