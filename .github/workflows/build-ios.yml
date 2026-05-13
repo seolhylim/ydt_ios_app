@@ -36,7 +36,7 @@ jobs:
           echo "PROFILE_UUID=$UUID" >> $GITHUB_ENV
           cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 
-      # 🚀 这里是关键：生成强制 entititlements
+      # 强制生成包含 applinks 的 entitlements
       - name: Generate Final Entitlements
         run: |
           cd ios/App
@@ -78,6 +78,7 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Development" \
             CODE_SIGN_ENTITLEMENTS=ent_final.plist
 
+      # 使用你已有的 ExportOptions.plist
       - name: Export IPA
         run: |
           cd ios/App
