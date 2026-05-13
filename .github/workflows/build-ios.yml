@@ -1,5 +1,6 @@
-name: iOS Final Signed Build (Export Fix)
-on: workflow_dispatch
+name: iOS Final Signed Build (Universal Link Fixed)
+on:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -10,7 +11,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install dependencies
         run: npm install
@@ -23,88 +24,71 @@ jobs:
       - name: Install Certificate
         run: |
           echo "${{ secrets.IOS_DISTRIBUTION_P12 }}" | base64 -d > dev_cert.p12
-
           security create-keychain -p "123456" build.keychain
           security unlock-keychain -p "123456" build.keychain
-          security list-keychains -d user -s build.keychain login.keychain
+          security import dev_cert.p12 -k build.keychain -P "${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}" -A
           security set-keychain-settings -lut 3600 build.keychain
 
-          security import dev_cert.p12 \
-            -k build.keychain \
-            -P "${{ secrets.IOS_P12_PASSWORD }}" \
-            -f pkcs12 -A
-
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "123456" build.keychain
-
-      - name: Install Provisioning Profile & AUTO GET UUID
+      - name: Install Provisioning Profile & Get UUID
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          
-          # 自动从新描述文件中提取 UUID（你不需要再管了！）
-          UUID=$(security cms -D -i Dev_App_ydt.mobileprovision | plutil -extract UUID raw -o - -)
-          echo "NEW UUID = $UUID"
-          
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(security cms -D -i Dev_App_ydt.mobileprovision))
+          echo "PROFILE_UUID=$UUID" >> $GITHUB_ENV
           cp Dev_App_ydt.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
-          echo "✅ PROFILE INSTALLED: $UUID"
-          
-          # 把自动获取的 UUID 写入环境变量
-          echo "UUID=$UUID" >> $GITHUB_ENV
-          
-      - name: Force Merge Entitlements
-        run: |
-          cd ios/App
-          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains array" App/App.entitlements || true
-          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:www.fllya.com" App/App.entitlements || true
 
-      - name: Xcode Archive
+      # 🚀 这里是关键：生成强制 entititlements
+      - name: Generate Final Entitlements
         run: |
           cd ios/App
-          
-          xcodebuild archive \
-            -project App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -archivePath build/App.xcarchive \
-            -destination generic/platform=iOS \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
-            PROVISIONING_PROFILE_SPECIFIER=${{ env.UUID }} \
-            CODE_SIGN_IDENTITY="iPhone Developer" \
-            OTHER_CFLAGS=-DDEBUG
-
-      - name: Prepare ExportOptions.plist
-        run: |
-          cd ios/App
-          cat > ExportOptions.plist << 'EOF'
+          cat > ent_final.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>method</key>
-              <string>debugging</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>teamID</key>
-              <string>${{ secrets.APPLE_DEVELOPER_TEAM_ID }}</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.app.ydt</key>
-                  <string>${{ env.UUID }}</string>
-              </dict>
+              <key>com.apple.developer.associated-domains</key>
+              <array>
+                  <string>applinks:www.fllya.com</string>
+              </array>
+              <key>application-identifier</key>
+              <string>7M6RRX3ZU6.com.app.ydt</string>
+              <key>com.apple.developer.team-identifier</key>
+              <string>7M6RRX3ZU6</string>
+              <key>get-task-allow</key>
+              <true/>
+              <key>keychain-access-groups</key>
+              <array>
+                  <string>7M6RRX3ZU6.*</string>
+                  <string>com.apple.token</string>
+              </array>
           </dict>
           </plist>
           EOF
+
+      - name: Xcode Build
+        run: |
+          cd ios/App
+          xcodebuild build \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
+            PROVISIONING_PROFILE=${{ env.PROFILE_UUID }} \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGN_ENTITLEMENTS=ent_final.plist
 
       - name: Export IPA
         run: |
           cd ios/App
           xcodebuild -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath . \
-            -exportOptionsPlist ExportOptions.plist
+            -archivePath build/Build/Intermediates.noindex/ArchiveIntermediates/App/BuildProductsPath/Release-iphoneos/App.xcarchive \
+            -exportPath ./output \
+            -exportOptionsPlist ../../ExportOptions.plist \
+            CODE_SIGN_ENTITLEMENTS=ent_final.plist
 
-      - name: Upload Signed IPA
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SIGNED_IPA
-          path: ios/App/App.ipa
+          name: Final_IPA
+          path: ios/App/output/App.ipa
