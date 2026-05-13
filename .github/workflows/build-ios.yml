@@ -68,7 +68,6 @@ jobs:
       - name: Xcode Archive
         run: |
           cd ios/App
-          
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
@@ -79,8 +78,8 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
             PROVISIONING_PROFILE_SPECIFIER=${{ env.UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer" \
-            OTHER_CFLAGS=-DDEBUG \
-            CODE_SIGN_ENTITLEMENTS=App/App.entitlements  # 关键修改2：使用工程内正确路径
+            CODE_SIGN_ENTITLEMENTS=App/App.entitlements \
+            --allowProvisioningUpdates
 
       - name: Prepare ExportOptions.plist
         run: |
