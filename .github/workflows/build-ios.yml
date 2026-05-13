@@ -49,6 +49,12 @@ jobs:
           
           # 把自动获取的 UUID 写入环境变量
           echo "UUID=$UUID" >> $GITHUB_ENV
+          
+      - name: Force Merge Entitlements
+        run: |
+          cd ios/App
+          PlistBuddy -c "Add :com.apple.developer.associated-domains array" App/App.entitlements
+          PlistBuddy -c "Add :com.apple.developer.associated-domains:0 string applinks:www.fllya.com" App/App.entitlements
 
       - name: Xcode Archive
         run: |
