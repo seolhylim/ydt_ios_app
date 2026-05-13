@@ -48,26 +48,10 @@ jobs:
           
           echo "UUID=$UUID" >> $GITHUB_ENV
 
-      # 关键修改1：强制生成包含 applinks 的 entitlements 文件
-      - name: Force Generate Entitlements
-        run: |
-          cd ios/App
-          cat > App.entitlements << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>com.apple.developer.associated-domains</key>
-              <array>
-                  <string>applinks:www.fllya.com</string>
-              </array>
-          </dict>
-          </plist>
-          EOF
-
       - name: Xcode Archive
         run: |
           cd ios/App
+          
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
@@ -78,8 +62,7 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.APPLE_DEVELOPER_TEAM_ID }} \
             PROVISIONING_PROFILE_SPECIFIER=${{ env.UUID }} \
             CODE_SIGN_IDENTITY="iPhone Developer" \
-            CODE_SIGN_ENTITLEMENTS=App/App.entitlements \
-            --allowProvisioningUpdates
+            CODE_SIGN_ENTITLEMENTS=App/App.entitlements
 
       - name: Prepare ExportOptions.plist
         run: |
@@ -111,7 +94,7 @@ jobs:
             -archivePath build/App.xcarchive \
             -exportPath . \
             -exportOptionsPlist ExportOptions.plist \
-            CODE_SIGN_ENTITLEMENTS=App/App.entitlements  # 关键修改3：导出时再次强制注入
+            -allowProvisioningUpdates
 
       - name: Upload Signed IPA
         uses: actions/upload-artifact@v4
