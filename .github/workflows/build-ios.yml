@@ -84,7 +84,7 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath build/Build/Intermediates.noindex/ArchiveIntermediates/App/BuildProductsPath/Release-iphoneos/App.xcarchive \
             -exportPath ./output \
-            -exportOptionsPlist ../../ExportOptions.plist \
+            -exportOptionsPlist ExportOptions.plist \
             CODE_SIGN_ENTITLEMENTS=ent_final.plist
 
       - name: Upload IPA
