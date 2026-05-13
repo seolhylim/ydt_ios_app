@@ -5,6 +5,13 @@
     <key>method</key>
     <string>development</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>teamID</key>
+    <string>7M6RRX3ZU6</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.app.ydt</key>
+        <string>${{ env.PROFILE_UUID }}</string>
+    </dict>
 </dict>
 </plist>
