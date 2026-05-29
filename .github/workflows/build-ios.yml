@@ -15,7 +15,7 @@ jobs:
       - name: Install dependencies
         run: 
           npm install
-          npm install @capacitor-community/apple-sign-in        
+          npm install @capacitor-community/apple-sign-in@7.1.0     
 
       - name: Sync Capacitor
         run: |
