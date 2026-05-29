@@ -14,9 +14,10 @@ jobs:
 
       - name: Install dependencies
         run: 
-          npm install
+          # 先安装所有依赖，并跳过 fibers 的编译
+          npm install --ignore-scripts
           npm install @capacitor-community/apple-sign-in
-          npx cap sync ios 
+          npx cap sync ios
 
       - name: Sync Capacitor
         run: |
