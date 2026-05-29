@@ -13,11 +13,7 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: 
-          # 先安装所有依赖，并跳过 fibers 的编译
-          npm install --ignore-scripts
-          npm install @capacitor-community/apple-sign-in
-          npx cap sync ios
+        run: npm install
 
       - name: Sync Capacitor
         run: |
