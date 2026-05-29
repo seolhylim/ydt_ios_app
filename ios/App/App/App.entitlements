@@ -6,5 +6,7 @@
     <array>
         <string>applinks:www.fllya.com</string>
     </array>
+    <key>com.apple.developer.sign-in-with-apple</key>
+    <true/>
 </dict>
 </plist>
