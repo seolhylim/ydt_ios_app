@@ -12,6 +12,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Clean Derived Data
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+        
       - name: Install dependencies
         run: npm install
 
